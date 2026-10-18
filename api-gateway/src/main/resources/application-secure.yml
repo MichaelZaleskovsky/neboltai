@@ -1,0 +1,7 @@
+spring:
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          # Replace with your Authorization Server later, e.g. Keycloak realm URL.
+          issuer-uri: ${OAUTH2_ISSUER_URI:http://localhost:9000}

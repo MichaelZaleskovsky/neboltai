@@ -1,0 +1,13 @@
+databaseChangeLog:
+  - changeSet:
+      id: create-catalogdb
+      author: neboltai
+      runInTransaction: false
+      preConditions:
+        - onFail: MARK_RAN
+        - sqlCheck:
+            expectedResult: 0
+            sql: SELECT count(*) FROM pg_database WHERE datname = 'catalogdb'
+      changes:
+        - sql:
+            sql: CREATE DATABASE catalogdb

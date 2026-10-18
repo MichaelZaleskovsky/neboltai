@@ -1,0 +1,10 @@
+.idea/
+*.iml
+**/target/
+*.log
+.env
+.DS_Store
+
+# Local SSH credentials
+ssh-key-*
+*.key

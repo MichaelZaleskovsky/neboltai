@@ -1,0 +1,123 @@
+services:
+  postgres:
+    image: postgres:17
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-neboltai}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-neboltai}
+      POSTGRES_DB: postgres
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks: [backend]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-neboltai} -d postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  liquibase:
+    image: liquibase/liquibase:4.31.1
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      LIQUIBASE_COMMAND_USERNAME: ${POSTGRES_USER:-neboltai}
+      LIQUIBASE_COMMAND_PASSWORD: ${POSTGRES_PASSWORD:-neboltai}
+      LIQUIBASE_SEARCH_PATH: /liquibase/changelog
+    volumes:
+      - ./infrastructure/liquibase/changelog:/liquibase/changelog:ro
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - >-
+        /liquibase/liquibase --url=jdbc:postgresql://postgres:5432/postgres
+        --changelog-file=server/db.changelog-root.yaml update &&
+        /liquibase/liquibase --url=jdbc:postgresql://postgres:5432/catalogdb
+        --changelog-file=catalog/db.changelog-root.yaml update
+    networks: [backend]
+
+  minio:
+    image: cgr.dev/chainguard/minio:latest
+    command: server /data
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-neboltai}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-neboltai-secret}
+    volumes:
+      - minio-data:/data
+    networks: [storage]
+    healthcheck:
+      test: ["CMD", "/usr/bin/minio", "--version"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  minio-init:
+    build: ./infrastructure/minio-init
+    depends_on:
+      minio:
+        condition: service_healthy
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-neboltai}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-neboltai-secret}
+    volumes:
+      - ./infrastructure/minio-init/images:/images:ro
+      - ./infrastructure/minio-init/upload.sh:/upload.sh:ro
+    entrypoint: ["/bin/sh", "/upload.sh"]
+    networks: [storage]
+
+  cantaloupe:
+    image: uclalibrary/cantaloupe:5.0.7-0
+    depends_on:
+      minio-init:
+        condition: service_completed_successfully
+    environment:
+      AWS_ACCESS_KEY_ID: ${MINIO_ROOT_USER:-neboltai}
+      AWS_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:-neboltai-secret}
+      JAVA_OPTS: -Xms512m -Xmx2g
+    # The image's default entrypoint appends its own defaults to the config file, which fails on a read-only mount.
+    entrypoint: ["/usr/local/bin/run_cantaloupe.sh"]
+    command: []
+    volumes:
+      - ./infrastructure/cantaloupe/cantaloupe.properties:/etc/cantaloupe/cantaloupe.properties:ro
+    networks: [backend, storage]
+    # IMPORTANT: no host port. Cantaloupe is private.
+
+  artwork-service:
+    build:
+      context: .
+      dockerfile: artwork-service/Dockerfile
+    depends_on:
+      liquibase:
+        condition: service_completed_successfully
+      minio-init:
+        condition: service_completed_successfully
+    environment:
+      CATALOG_DB_URL: jdbc:postgresql://postgres:5432/catalogdb
+      POSTGRES_USER: ${POSTGRES_USER:-neboltai}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-neboltai}
+      MINIO_URL: http://minio:9000
+      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:-neboltai}
+      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-neboltai-secret}
+      PUBLIC_BASE_URL: http://localhost:8080
+    networks: [backend, storage]
+
+  api-gateway:
+    build:
+      context: .
+      dockerfile: api-gateway/Dockerfile
+    depends_on:
+      - artwork-service
+      - cantaloupe
+    environment:
+      ARTWORK_SERVICE_URL: http://artwork-service:8081
+      CANTALOUPE_URL: http://cantaloupe:8182
+    ports:
+      - "8080:8080"
+    networks: [backend]
+
+networks:
+  backend:
+  storage:
+    internal: true
+
+volumes:
+  postgres-data:
+  minio-data:

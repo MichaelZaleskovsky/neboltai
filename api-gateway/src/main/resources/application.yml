@@ -1,0 +1,25 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: api-gateway
+  cloud:
+    gateway:
+      server:
+        webflux:
+          routes:
+            - id: iiif-cantaloupe
+              uri: ${CANTALOUPE_URL:http://localhost:8182}
+              predicates:
+                - Path=/iiif/**
+
+app:
+  cantaloupe-base-url: ${CANTALOUPE_URL:http://localhost:8182}
+  artwork-service-url: ${ARTWORK_SERVICE_URL:http://localhost:8081}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info

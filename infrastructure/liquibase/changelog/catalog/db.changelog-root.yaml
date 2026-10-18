@@ -1,0 +1,209 @@
+databaseChangeLog:
+  - changeSet:
+      id: 001-create-author
+      author: neboltai
+      changes:
+        - createTable:
+            tableName: author
+            columns:
+              - column:
+                  name: id
+                  type: BIGINT
+                  autoIncrement: true
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: family_name
+                  type: VARCHAR(256)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: name
+                  type: VARCHAR(256)
+              - column:
+                  name: second_name
+                  type: VARCHAR(256)
+              - column:
+                  name: description
+                  type: VARCHAR(4000)
+
+  - changeSet:
+      id: 001a-create-media-type
+      author: neboltai
+      changes:
+        - createTable:
+            tableName: media_type
+            columns:
+              - column:
+                  name: id
+                  type: BIGINT
+                  autoIncrement: true
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: type
+                  type: VARCHAR(256)
+                  constraints:
+                    nullable: false
+                    unique: true
+              - column:
+                  name: description
+                  type: VARCHAR(4000)
+
+  - changeSet:
+      id: 001b-create-media
+      author: neboltai
+      changes:
+        - createTable:
+            tableName: media
+            columns:
+              - column:
+                  name: id
+                  type: BIGINT
+                  autoIncrement: true
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: name
+                  type: VARCHAR(256)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: type_id
+                  type: BIGINT
+                  constraints:
+                    nullable: false
+                    foreignKeyName: fk_media_media_type
+                    references: media_type(id)
+              - column:
+                  name: description
+                  type: VARCHAR(4000)
+        - createIndex:
+            tableName: media
+            indexName: idx_media_type_id
+            columns:
+              - column:
+                  name: type_id
+
+  - changeSet:
+      id: 002-create-artwork
+      author: neboltai
+      changes:
+        - createTable:
+            tableName: artwork
+            columns:
+              - column:
+                  name: id
+                  type: BIGINT
+                  autoIncrement: true
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: image_id
+                  type: UUID
+                  constraints:
+                    nullable: false
+                    unique: true
+              - column:
+                  name: image_name
+                  type: VARCHAR(256)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: file_name
+                  type: VARCHAR(256)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: media_id
+                  type: BIGINT
+                  constraints:
+                    nullable: false
+                    foreignKeyName: fk_artwork_media
+                    references: media(id)
+              - column:
+                  name: width
+                  type: INTEGER
+                  constraints:
+                    nullable: false
+              - column:
+                  name: height
+                  type: INTEGER
+                  constraints:
+                    nullable: false
+              - column:
+                  name: year
+                  type: INTEGER
+                  constraints:
+                    nullable: false
+              - column:
+                  name: description
+                  type: VARCHAR(4000)
+              - column:
+                  name: author_id
+                  type: BIGINT
+                  constraints:
+                    nullable: false
+                    foreignKeyName: fk_artwork_author
+                    references: author(id)
+        - createIndex:
+            tableName: artwork
+            indexName: idx_artwork_year
+            columns:
+              - column:
+                  name: year
+        - createIndex:
+            tableName: artwork
+            indexName: idx_artwork_author_id
+            columns:
+              - column:
+                  name: author_id
+
+  - changeSet:
+      id: 003-seed-authors
+      author: neboltai
+      changes:
+        - sql:
+            sql: |
+              INSERT INTO author (family_name, name, second_name, description) VALUES
+              ('Ivanov', 'Ivan', 'Petrovich', 'Landscape photographer, author of the "Northern Light" series.'),
+              ('Smirnova', 'Anna', NULL, 'Documentary photographer working with film and large-format scans.'),
+              ('Volkov', 'Dmitry', 'Sergeevich', NULL);
+
+  - changeSet:
+      id: 003a-seed-media
+      author: neboltai
+      changes:
+        - sql:
+            sql: |
+              INSERT INTO media_type (type, description) VALUES
+              ('poster', 'Large-format printed sheet.'),
+              ('magazine', 'Periodical publication.'),
+              ('postcard', 'Small illustrated card.'),
+              ('book', 'Bound printed publication.');
+              INSERT INTO media (name, type_id, description) VALUES
+              ('Art Poster', (SELECT id FROM media_type WHERE type = 'poster'), 'Offset-printed art poster.'),
+              ('Photo Magazine', (SELECT id FROM media_type WHERE type = 'magazine'), 'Monthly photography magazine.'),
+              ('Greeting Postcard', (SELECT id FROM media_type WHERE type = 'postcard'), NULL),
+              ('Photo Book', (SELECT id FROM media_type WHERE type = 'book'), 'Hardcover photo album.');
+
+  - changeSet:
+      id: 004-seed-artworks
+      author: neboltai
+      comment: image_id values must match the object keys in MinIO (see infrastructure/minio-init/upload.sh)
+      changes:
+        - sql:
+            sql: |
+              INSERT INTO artwork (image_id, image_name, file_name, media_id, width, height, year, description, author_id) VALUES
+              ('7d1e0c10-0001-4a00-8000-000000000001', 'Northern Shore', 'photo-1.jpg', (SELECT id FROM media WHERE name = 'Photo Book'), 8160, 6144, 2018, 'Coastline at dawn.', (SELECT id FROM author WHERE family_name = 'Ivanov')),
+              ('7d1e0c10-0002-4a00-8000-000000000002', 'Harbour Morning', 'photo-2.tif', (SELECT id FROM media WHERE name = 'Photo Magazine'), 8574, 6577, 2019, NULL, (SELECT id FROM author WHERE family_name = 'Ivanov')),
+              ('7d1e0c10-0003-4a00-8000-000000000003', 'Winter Road', 'photo-3.tif', (SELECT id FROM media WHERE name = 'Art Poster'), 6000, 3834, 2020, 'Panorama of a winter road.', (SELECT id FROM author WHERE family_name = 'Ivanov')),
+              ('7d1e0c10-0004-4a00-8000-000000000004', 'Old Town', 'photo-4.tif', (SELECT id FROM media WHERE name = 'Photo Book'), 10882, 7210, 2021, 'Large-format scan of an old town street.', (SELECT id FROM author WHERE family_name = 'Ivanov')),
+              ('7d1e0c10-0005-4a00-8000-000000000005', 'Market Day', 'photo-5.jpg', (SELECT id FROM media WHERE name = 'Greeting Postcard'), 4096, 2441, 2016, 'Street scene.', (SELECT id FROM author WHERE family_name = 'Smirnova')),
+              ('7d1e0c10-0006-4a00-8000-000000000006', 'Evening Crowd', 'photo-6.jpg', (SELECT id FROM media WHERE name = 'Photo Magazine'), 4096, 2935, 2017, NULL, (SELECT id FROM author WHERE family_name = 'Smirnova')),
+              ('7d1e0c10-0007-4a00-8000-000000000007', 'Quiet Field', 'photo-7.jpg', (SELECT id FROM media WHERE name = 'Art Poster'), 6000, 4000, 2022, 'Field in morning fog.', (SELECT id FROM author WHERE family_name = 'Volkov'));
+
