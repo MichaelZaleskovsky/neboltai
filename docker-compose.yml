@@ -64,7 +64,7 @@ services:
     networks: [storage]
 
   cantaloupe:
-    image: uclalibrary/cantaloupe:5.0.7-0
+    image: islandora/cantaloupe:6.4.2
     depends_on:
       minio-init:
         condition: service_completed_successfully
@@ -96,7 +96,6 @@ services:
       MINIO_URL: http://minio:9000
       MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:-neboltai}
       MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-neboltai-secret}
-      PUBLIC_BASE_URL: http://localhost:8080
     networks: [backend, storage]
 
   api-gateway:

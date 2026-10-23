@@ -14,7 +14,7 @@ spring:
     open-in-view: false
 
 app:
-  public-base-url: ${PUBLIC_BASE_URL:http://localhost:8080}
+  public-base-url: ${PUBLIC_BASE_URL:http://192.168.8.104:8080}
   minio:
     url: ${MINIO_URL:http://localhost:9000}
     access-key: ${MINIO_ACCESS_KEY:neboltai}
