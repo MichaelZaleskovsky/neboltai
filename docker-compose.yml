@@ -73,8 +73,6 @@ services:
       AWS_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:-neboltai-secret}
       JAVA_OPTS: -Xms512m -Xmx2g
     # The image's default entrypoint appends its own defaults to the config file, which fails on a read-only mount.
-    entrypoint: ["/usr/local/bin/run_cantaloupe.sh"]
-    command: []
     volumes:
       - ./infrastructure/cantaloupe/cantaloupe.properties:/etc/cantaloupe/cantaloupe.properties:ro
     networks: [backend, storage]
