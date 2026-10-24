@@ -68,13 +68,38 @@ services:
     depends_on:
       minio-init:
         condition: service_completed_successfully
+    # Islandora generates /opt/cantaloupe/cantaloupe.properties from these variables.
     environment:
-      AWS_ACCESS_KEY_ID: ${MINIO_ROOT_USER:-neboltai}
-      AWS_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:-neboltai-secret}
-      JAVA_OPTS: -Xms512m -Xmx2g
-    # The image's default entrypoint appends its own defaults to the config file, which fails on a read-only mount.
-    volumes:
-      - ./infrastructure/cantaloupe/cantaloupe.properties:/etc/cantaloupe/cantaloupe.properties:ro
+      CANTALOUPE_HEAP_MIN: "512m"
+      CANTALOUPE_HEAP_MAX: "2G"
+      CANTALOUPE_HTTP_ENABLED: "true"
+      CANTALOUPE_HTTP_HOST: "0.0.0.0"
+      CANTALOUPE_HTTP_PORT: "8182"
+      CANTALOUPE_HTTPS_ENABLED: "false"
+      CANTALOUPE_BASE_URI: "${PUBLIC_BASE_URL:-http://localhost:8080}"
+      CANTALOUPE_ENDPOINT_IIIF_1_ENABLED: "false"
+      CANTALOUPE_ENDPOINT_IIIF_2_ENABLED: "false"
+      CANTALOUPE_ENDPOINT_IIIF_3_ENABLED: "true"
+      CANTALOUPE_ENDPOINT_ADMIN_ENABLED: "false"
+      CANTALOUPE_ENDPOINT_API_ENABLED: "false"
+      CANTALOUPE_SOURCE_STATIC: "S3Source"
+      CANTALOUPE_SOURCE_DELEGATE: "false"
+      CANTALOUPE_S3SOURCE_ENDPOINT: "http://minio:9000"
+      CANTALOUPE_S3SOURCE_REGION: "local"
+      CANTALOUPE_S3SOURCE_ACCESS_KEY_ID: "${MINIO_ROOT_USER:-neboltai}"
+      CANTALOUPE_S3SOURCE_SECRET_KEY: "${MINIO_ROOT_PASSWORD:-neboltai-secret}"
+      CANTALOUPE_S3SOURCE_LOOKUP_STRATEGY: "BasicLookupStrategy"
+      CANTALOUPE_S3SOURCE_BASICLOOKUPSTRATEGY_BUCKET_NAME: "collection-masters"
+      CANTALOUPE_S3SOURCE_BASICLOOKUPSTRATEGY_PATH_PREFIX: ""
+      CANTALOUPE_S3SOURCE_BASICLOOKUPSTRATEGY_PATH_SUFFIX: ""
+      CANTALOUPE_S3SOURCE_CHUNKING_ENABLED: "true"
+      CANTALOUPE_CACHE_SERVER_DERIVATIVE_ENABLED: "true"
+      CANTALOUPE_CACHE_SERVER_DERIVATIVE: "FilesystemCache"
+      CANTALOUPE_FILESYSTEMCACHE_PATHNAME: "/data/cache"
+      CANTALOUPE_CACHE_SERVER_INFO_ENABLED: "true"
+      CANTALOUPE_LOG_APPLICATION_LEVEL: "info"
+      CANTALOUPE_LOG_APPLICATION_CONSOLEAPPENDER_ENABLED: "true"
+      CANTALOUPE_LOG_ERROR_CONSOLEAPPENDER_ENABLED: "true"
     networks: [backend, storage]
     # IMPORTANT: no host port. Cantaloupe is private.
 
