@@ -78,6 +78,14 @@ http://localhost:8080/iiif/3/7d1e0c10-0001-4a00-8000-000000000001/info.json
 
 The Gateway proxies `/iiif/**` to private Cantaloupe. Later, authentication can be enabled at the Gateway without changing Cantaloupe or OpenSeadragon URL structure.
 
+The `islandora/cantaloupe` image generates `/opt/cantaloupe/cantaloupe.properties`
+from the `CANTALOUPE_*` variables in Compose. The reference file under
+`infrastructure/cantaloupe/` is not mounted or loaded by this image. Configure
+S3 credentials through `MINIO_ROOT_USER` and `MINIO_ROOT_PASSWORD`, and set
+`PUBLIC_BASE_URL` to the externally reachable Gateway URL for IIIF tile links.
+Production `CANTALOUPE_IMAGE` must support the same Islandora environment variables.
+After changing settings, run `docker compose up -d --no-deps cantaloupe`.
+
 ## Authentication status
 
 Development mode intentionally has **no authentication**.
