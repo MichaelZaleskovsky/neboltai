@@ -76,10 +76,13 @@ The Gateway converts this to an internal IIIF request to Cantaloupe and streams 
 curl -F "file=@photo.tif" http://localhost:8080/api/artworks/addImage
 ```
 
-JPEG and TIFF are detected from the file contents. The original is stored unchanged
-in `collection-masters`, and a JPEG preview of width 300 pixels (height proportional
-to the original) is stored in `collection-previews`. Both object keys are the same
-generated UUID, without an extension. TIFF previews use the first page.
+JPEG and TIFF are detected from the file contents. The service converts the first
+image/page to a tiled pyramidal TIFF using libvips (512 x 512 tiles, half-resolution
+levels, lossless Deflate compression) and stores it in `collection-masters`.
+Only the converted TIFF and a 300-pixel-wide JPEG preview in `collection-previews`
+are retained. The uploaded original is temporary and is deleted after processing.
+Both object keys are the same generated UUID, without an extension. The response
+`fileName` remains the submitted filename for metadata; the stored master is always TIFF.
 The response is `201 Created` with `imageId`, `fileName`, `width`, `height`,
 `previewWidth`, `previewHeight` and `previewUrl`. Pass `imageId` and the metadata
 to `/api/artworks/addMediaData` to create the database record.
@@ -89,6 +92,13 @@ Uploads default to 2 GB per file (2049 MB per multipart request). Configure artw
 (the request limit must also allow multipart overhead). Empty uploads return 400,
 unsupported image formats return 415, and storage failures return 503.
 If an upload fails, the service attempts to remove both objects.
+
+Docker installs `libvips-tools`. For running artwork-service outside Docker, install
+libvips and put `vips` on PATH or set `VIPS_EXECUTABLE` to its executable path.
+`IMAGE_CONVERSION_TIMEOUT` defaults to `PT10M` (10 minutes). One conversion runs at
+a time per service instance to bound memory and CPU usage; queued conversions wait
+up to the same timeout. Conversion adds time to uploads but accelerates uncached
+IIIF requests. Existing objects are not converted automatically.
 
 ## Delete an image
 

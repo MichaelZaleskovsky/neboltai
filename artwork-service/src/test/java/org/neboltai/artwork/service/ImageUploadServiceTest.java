@@ -16,13 +16,25 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import org.junit.jupiter.api.BeforeEach;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 class ImageUploadServiceTest {
     private final MinioClient client = mock(MinioClient.class);
-    private final ImageUploadService service = new ImageUploadService(client);
+    private final PyramidalTiffConverter converter = mock(PyramidalTiffConverter.class);
+    private final ImageUploadService service = new ImageUploadService(client, converter);
+
+    @BeforeEach
+    void convertedFixture() {
+        doAnswer(call -> {
+            Files.write(call.getArgument(1, Path.class), image("tiff", 16, 8));
+            return null;
+        }).when(converter).convert(any(), any());
+    }
 
     ImageUploadServiceTest() {
         ReflectionTestUtils.setField(service, "masterBucket", "collection-masters");
@@ -68,7 +80,15 @@ class ImageUploadServiceTest {
         assertEquals("collection-previews", uploads.get(1).bucket());
         assertEquals(result.imageId().toString(), uploads.get(0).object());
         assertEquals(uploads.get(0).object(), uploads.get(1).object());
-        assertArrayEquals(original, contents.get(0));
+        assertFalse(java.util.Arrays.equals(original, contents.get(0)));
+        assertArrayEquals(image("tiff", 16, 8), contents.get(0));
+        assertEquals("image/tiff", uploads.get(0).contentType());
+        var inputPath = org.mockito.ArgumentCaptor.forClass(Path.class);
+        var outputPath = org.mockito.ArgumentCaptor.forClass(Path.class);
+        verify(converter).convert(inputPath.capture(), outputPath.capture());
+        assertFalse(Files.exists(inputPath.getValue()));
+        assertFalse(Files.exists(outputPath.getValue()));
+        assertFalse(Files.exists(inputPath.getValue().getParent()));
         BufferedImage preview = ImageIO.read(new ByteArrayInputStream(contents.get(1)));
         assertEquals(300, preview.getWidth());
         assertEquals(previewHeight, preview.getHeight());
@@ -96,6 +116,19 @@ class ImageUploadServiceTest {
         assertEquals("collection-previews", removed.getAllValues().get(0).bucket());
         assertEquals("collection-masters", removed.getAllValues().get(1).bucket());
         assertEquals(removed.getAllValues().get(0).object(), removed.getAllValues().get(1).object());
+    }
+
+    @Test
+    void conversionFailureUploadsNothingAndRemovesTemporaryInput() throws Exception {
+        doThrow(new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid TIFF"))
+                .when(converter).convert(any(), any());
+        assertEquals(HttpStatus.BAD_REQUEST, assertThrows(ResponseStatusException.class,
+                () -> service.addImage(new MockMultipartFile("file", image("jpeg", 600, 400)))).getStatusCode());
+        verifyNoInteractions(client);
+        var inputPath = org.mockito.ArgumentCaptor.forClass(Path.class);
+        verify(converter).convert(inputPath.capture(), any());
+        assertFalse(Files.exists(inputPath.getValue()));
+        assertFalse(Files.exists(inputPath.getValue().getParent()));
     }
 
     private static byte[] image(String format, int width, int height) throws IOException {

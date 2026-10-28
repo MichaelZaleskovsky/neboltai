@@ -55,7 +55,8 @@ public class ArtworkController {
 
     @Operation(summary = "Upload a TIFF or JPEG image",
             description = "Multipart form with a file part named file. Returns imageId, original dimensions and previewUrl. "
-                    + "The JPEG preview is 300 pixels wide with the original aspect ratio.",
+                    + "Stores only a lossless tiled pyramidal TIFF and a 300-pixel-wide JPEG preview. "
+                    + "The uploaded original is discarded after processing.",
             requestBody = @io.swagger.v3.oas.annotations.parameters.RequestBody(required = true,
                     content = @Content(mediaType = MediaType.MULTIPART_FORM_DATA_VALUE,
                             schema = @Schema(implementation = ImageUploadForm.class))))

@@ -19,6 +19,9 @@ spring:
     open-in-view: false
 
 app:
+  image-conversion:
+    vips-executable: ${VIPS_EXECUTABLE:vips}
+    timeout: ${IMAGE_CONVERSION_TIMEOUT:PT10M}
   public-base-url: ${PUBLIC_BASE_URL:http://192.168.8.104:8080}
   minio:
     url: ${MINIO_URL:http://localhost:9000}

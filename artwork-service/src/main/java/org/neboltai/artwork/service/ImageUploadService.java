@@ -32,6 +32,7 @@ import java.util.UUID;
 public class ImageUploadService {
     private static final int PREVIEW_WIDTH = 300;
     private final MinioClient minioClient;
+    private final PyramidalTiffConverter converter;
 
     @Value("${app.minio.master-bucket}")
     private String masterBucket;
@@ -42,11 +43,15 @@ public class ImageUploadService {
 
     public AddImageResponse addImage(MultipartFile file) {
         if (file.isEmpty()) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Image file is empty");
+        Path directory = null;
         Path temporary = null;
+        Path pyramid = null;
         UUID imageId = UUID.randomUUID();
         boolean uploadStarted = false;
         try {
-            temporary = Files.createTempFile("artwork-upload-", ".image");
+            directory = Files.createTempDirectory("artwork-upload-");
+            temporary = directory.resolve("input.image");
+            pyramid = directory.resolve("pyramid.tif");
             try (InputStream input = file.getInputStream()) {
                 Files.copy(input, temporary, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
             }
@@ -73,13 +78,14 @@ public class ImageUploadService {
                     } catch (IOException | IllegalArgumentException e) {
                         throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Cannot decode image", e);
                     }
-                    uploadStarted = true;
-                    try (InputStream original = Files.newInputStream(temporary)) {
-                        minioClient.putObject(PutObjectArgs.builder().bucket(masterBucket)
-                                .object(imageId.toString()).stream(original, Files.size(temporary), -1)
-                                .contentType(format.equals("jpeg") ? "image/jpeg" : "image/tiff").build());
-                    }
+                    converter.convert(temporary, pyramid);
                     byte[] preview = preview(source, previewHeight);
+                    uploadStarted = true;
+                    try (InputStream converted = Files.newInputStream(pyramid)) {
+                        minioClient.putObject(PutObjectArgs.builder().bucket(masterBucket)
+                                .object(imageId.toString()).stream(converted, Files.size(pyramid), -1)
+                                .contentType("image/tiff").build());
+                    }
                     try (InputStream bytes = new ByteArrayInputStream(preview)) {
                         minioClient.putObject(PutObjectArgs.builder().bucket(previewBucket)
                                 .object(imageId.toString()).stream(bytes, preview.length, -1)
@@ -99,8 +105,10 @@ public class ImageUploadService {
             if (uploadStarted) cleanup(imageId, e);
             throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "Cannot upload image", e);
         } finally {
-            if (temporary != null) {
-                try { Files.deleteIfExists(temporary); } catch (IOException ignored) { }
+            for (Path path : new Path[]{pyramid, temporary, directory}) {
+                if (path != null) {
+                    try { Files.deleteIfExists(path); } catch (IOException ignored) { }
+                }
             }
         }
     }
