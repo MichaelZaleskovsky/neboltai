@@ -19,6 +19,12 @@ import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.http.server.reactive.ServerHttpRequest;
+import org.springframework.web.reactive.function.BodyInserters;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -33,6 +39,55 @@ public class ArtworkController {
     public ArtworkController(WebClient.Builder builder,
                              @Value("${app.artwork-service-url}") String artworkServiceUrl) {
         this.artworkClient = builder.baseUrl(artworkServiceUrl).build();
+    }
+
+    @Operation(summary = "Delete an image, its preview and artwork metadata",
+            description = "Deletes by image UUID. Repeating the request is allowed; missing data is ignored. "
+                    + "Returns 503 on MinIO failure and preserves database metadata for retry.")
+    @ApiResponse(responseCode = "204", description = "Image, preview and metadata deleted")
+    @DeleteMapping("/deleteImage/{imageId}")
+    public Mono<ResponseEntity<Flux<DataBuffer>>> deleteImage(@PathVariable UUID imageId) {
+        return artworkClient.delete().uri("/api/artworks/deleteImage/{imageId}", imageId)
+                .retrieve()
+                .onStatus(HttpStatusCode::isError, response -> Mono.empty())
+                .toEntityFlux(DataBuffer.class);
+    }
+
+    @Operation(summary = "Upload a TIFF or JPEG image",
+            description = "Multipart form with a file part named file. Returns imageId, original dimensions and previewUrl. "
+                    + "The JPEG preview is 300 pixels wide with the original aspect ratio.",
+            requestBody = @io.swagger.v3.oas.annotations.parameters.RequestBody(required = true,
+                    content = @Content(mediaType = MediaType.MULTIPART_FORM_DATA_VALUE,
+                            schema = @Schema(implementation = ImageUploadForm.class))))
+    @PostMapping(value = "/addImage", consumes = MediaType.MULTIPART_FORM_DATA_VALUE,
+            produces = MediaType.APPLICATION_JSON_VALUE)
+    public Mono<ResponseEntity<Flux<DataBuffer>>> addImage(ServerHttpRequest request) {
+        // Forward the multipart stream and boundary without buffering the large file in the gateway.
+        return artworkClient.post().uri("/api/artworks/addImage")
+                .contentType(request.getHeaders().getContentType())
+                .accept(MediaType.APPLICATION_JSON)
+                .body(BodyInserters.fromDataBuffers(request.getBody()))
+                .retrieve()
+                .onStatus(HttpStatusCode::isError, response -> Mono.empty())
+                .toEntityFlux(DataBuffer.class);
+    }
+
+    public record ImageUploadForm(@Schema(type = "string", format = "binary") String file) {}
+
+    @Operation(summary = "Create or update image metadata",
+            description = "JSON: imageId (UUID), imageName, fileName, mediaId, authorId, width, height, year, description. "
+                    + "Null or blank fields preserve existing values. New records require all fields except description. "
+                    + "Returns 404 if the master image, author or media does not exist; 503 if MinIO is unavailable.")
+    @PostMapping(value = "/addMediaData", consumes = MediaType.APPLICATION_JSON_VALUE,
+            produces = MediaType.APPLICATION_JSON_VALUE)
+    public Mono<ResponseEntity<Flux<DataBuffer>>> addMediaData(@RequestBody Map<String, Object> request) {
+        return artworkClient.post().uri("/api/artworks/addMediaData")
+                .contentType(MediaType.APPLICATION_JSON)
+                .accept(MediaType.APPLICATION_JSON)
+                .bodyValue(request)
+                .retrieve()
+                .onStatus(HttpStatusCode::isError, response -> Mono.empty())
+                .toEntityFlux(DataBuffer.class);
     }
 
     /// Searches artworks through the private artwork-service; all filters are optional and combined with AND.

@@ -68,6 +68,41 @@ GET http://localhost:8080/api/images/7d1e0c10-0004-4a00-8000-000000000004/crop?x
 
 The Gateway converts this to an internal IIIF request to Cantaloupe and streams the JPEG back to the client.
 
+## Upload an image
+
+`POST /api/artworks/addImage` accepts a multipart file part named `file`:
+
+```sh
+curl -F "file=@photo.tif" http://localhost:8080/api/artworks/addImage
+```
+
+JPEG and TIFF are detected from the file contents. The original is stored unchanged
+in `collection-masters`, and a JPEG preview of width 300 pixels (height proportional
+to the original) is stored in `collection-previews`. Both object keys are the same
+generated UUID, without an extension. TIFF previews use the first page.
+The response is `201 Created` with `imageId`, `fileName`, `width`, `height`,
+`previewWidth`, `previewHeight` and `previewUrl`. Pass `imageId` and the metadata
+to `/api/artworks/addMediaData` to create the database record.
+
+Uploads default to 2 GB per file (2049 MB per multipart request). Configure artwork-service with
+`IMAGE_UPLOAD_MAX_FILE_SIZE` and `IMAGE_UPLOAD_MAX_REQUEST_SIZE` to change the limit
+(the request limit must also allow multipart overhead). Empty uploads return 400,
+unsupported image formats return 415, and storage failures return 503.
+If an upload fails, the service attempts to remove both objects.
+
+## Delete an image
+
+```sh
+curl -X DELETE http://localhost:8080/api/artworks/deleteImage/IMAGE_UUID
+```
+
+Returns `204 No Content` after deleting the master, preview and artwork metadata.
+Author and media reference data remain available. Missing objects and metadata are
+ignored, so repeated requests are safe. A MinIO failure returns 503 and prevents
+metadata deletion. MinIO and PostgreSQL do not share a transaction: a partial
+failure can leave objects deleted while metadata remains; repeat the request to
+complete deletion. Existing browser and Cantaloupe caches are not purged.
+
 ## OpenSeadragon / raw IIIF through Gateway
 
 OpenSeadragon should never use the internal Cantaloupe address. Use only:
@@ -85,6 +120,20 @@ S3 credentials through `MINIO_ROOT_USER` and `MINIO_ROOT_PASSWORD`, and set
 `PUBLIC_BASE_URL` to the externally reachable Gateway URL for IIIF tile links.
 Production `CANTALOUPE_IMAGE` must support the same Islandora environment variables.
 After changing settings, run `docker compose up -d --no-deps cantaloupe`.
+
+Compose enables `CANTALOUPE_PROCESSOR_DOWNSCALE_LINEAR=true` to convert images to
+linear RGB before resampling. This avoids a Cantaloupe 5.0.7 `ResampleOp`
+`ArrayIndexOutOfBoundsException` observed with grayscale TIFF crops and tiles.
+The original in MinIO is unchanged. Color conversion adds processing work on cache misses.
+
+Cantaloupe defaults to a 4 GB maximum heap (`CANTALOUPE_HEAP_MAX` can override it).
+Its HTTP thread pool is bounded to 16 threads with a 128-entry accept queue to
+keep the server bounded. Gateway uses fixed connection pools of 2 connections for
+IIIF tiles and 2 for crop requests, queuing acquisition for up to 300 seconds. This
+limits simultaneous decodes to 4 across both entry points and avoids the heap exhaustion observed
+when loading many uncached tiles of a 20000 x 10000 TIFF at once. Requests may wait
+while workers are busy; queue saturation may return 503. Allow memory for the JVM
+outside the heap and for the other services when sizing the Docker host.
 
 ## Authentication status
 

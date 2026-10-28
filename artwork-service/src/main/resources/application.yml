@@ -4,6 +4,11 @@ server:
 spring:
   application:
     name: artwork-service
+  servlet:
+    multipart:
+      max-file-size: ${IMAGE_UPLOAD_MAX_FILE_SIZE:2GB}
+      max-request-size: ${IMAGE_UPLOAD_MAX_REQUEST_SIZE:2049MB}
+      file-size-threshold: 0B
   datasource:
     url: ${CATALOG_DB_URL:jdbc:postgresql://localhost:5432/catalogdb}
     username: ${POSTGRES_USER:neboltai}
@@ -19,6 +24,7 @@ app:
     url: ${MINIO_URL:http://localhost:9000}
     access-key: ${MINIO_ACCESS_KEY:neboltai}
     secret-key: ${MINIO_SECRET_KEY:neboltai-secret}
+    master-bucket: ${MINIO_MASTER_BUCKET:collection-masters}
     preview-bucket: ${MINIO_PREVIEW_BUCKET:collection-previews}
 
 management:

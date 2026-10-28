@@ -74,7 +74,13 @@ services:
     # Islandora generates /opt/cantaloupe/cantaloupe.properties from these variables.
     environment:
       CANTALOUPE_HEAP_MIN: "512m"
-      CANTALOUPE_HEAP_MAX: "2G"
+      CANTALOUPE_HEAP_MAX: "${CANTALOUPE_HEAP_MAX:-4G}"
+      # Bound Jetty workers so simultaneous large TIFF decodes cannot exhaust the heap.
+      CANTALOUPE_HTTP_MIN_THREADS: "8"
+      CANTALOUPE_HTTP_MAX_THREADS: "16"
+      CANTALOUPE_HTTP_ACCEPT_QUEUE_LIMIT: "128"
+      # Normalize color before resampling to avoid Java2dProcessor failures on grayscale/alpha TIFFs.
+      CANTALOUPE_PROCESSOR_DOWNSCALE_LINEAR: "true"
       CANTALOUPE_HTTP_ENABLED: "true"
       CANTALOUPE_HTTP_HOST: "0.0.0.0"
       CANTALOUPE_HTTP_PORT: "8182"

@@ -1,6 +1,18 @@
 package org.neboltai.artwork.controller;
 
 import lombok.RequiredArgsConstructor;
+import org.neboltai.artwork.service.ImageDeletionService;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.neboltai.artwork.dto.AddImageResponse;
+import org.neboltai.artwork.service.ImageUploadService;
+import org.springframework.web.bind.annotation.RequestPart;
+import org.springframework.web.bind.annotation.ResponseStatus;
+import org.springframework.web.multipart.MultipartFile;
+import org.springframework.http.HttpStatus;
+import org.neboltai.artwork.dto.AddMediaDataRequest;
+import org.neboltai.artwork.service.ArtworkMetadataService;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.neboltai.artwork.dto.ArtworkDetailDto;
 import org.neboltai.artwork.dto.PageResponse;
 import org.neboltai.artwork.service.ArtworkSearchService;
@@ -23,6 +35,28 @@ import java.util.UUID;
 public class ArtworkController {
     private final ArtworkSearchService searchService;
     private final PreviewService previewService;
+    private final ArtworkMetadataService metadataService;
+    private final ImageUploadService uploadService;
+    private final ImageDeletionService deletionService;
+
+    @DeleteMapping("/deleteImage/{imageId}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void deleteImage(@PathVariable UUID imageId) {
+        deletionService.deleteImage(imageId);
+    }
+
+    @PostMapping(value = "/addImage", consumes = MediaType.MULTIPART_FORM_DATA_VALUE,
+            produces = MediaType.APPLICATION_JSON_VALUE)
+    @ResponseStatus(HttpStatus.CREATED)
+    public AddImageResponse addImage(@RequestPart("file") MultipartFile file) {
+        return uploadService.addImage(file);
+    }
+
+    @PostMapping(value = "/addMediaData", consumes = MediaType.APPLICATION_JSON_VALUE,
+            produces = MediaType.APPLICATION_JSON_VALUE)
+    public ArtworkDetailDto addMediaData(@RequestBody AddMediaDataRequest request) {
+        return metadataService.addMediaData(request);
+    }
 
     /**
      * Paged artwork search; {@code page} is zero-based, {@code size} is limited to 1..100.
