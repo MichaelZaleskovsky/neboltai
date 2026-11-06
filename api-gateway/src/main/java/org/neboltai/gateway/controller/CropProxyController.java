@@ -5,7 +5,7 @@ import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
-import org.springframework.beans.factory.annotation.Value;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.core.io.buffer.DataBuffer;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.MediaType;
@@ -27,9 +27,8 @@ public class CropProxyController {
 
     private final WebClient cantaloupeClient;
 
-    public CropProxyController(WebClient.Builder builder,
-                               @Value("${app.cantaloupe-base-url}") String cantaloupeBaseUrl) {
-        this.cantaloupeClient = builder.baseUrl(cantaloupeBaseUrl).build();
+    public CropProxyController(@Qualifier("cantaloupeClient") WebClient cantaloupeClient) {
+        this.cantaloupeClient = cantaloupeClient;
     }
 
     /// Crop endpoint. The original file never leaves the private MinIO/Cantaloupe network.

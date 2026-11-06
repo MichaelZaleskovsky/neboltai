@@ -8,6 +8,12 @@ spring:
     gateway:
       server:
         webflux:
+          # Queue tile requests in Gateway instead of opening many concurrent decoders.
+          httpclient:
+            pool:
+              type: fixed
+              max-connections: 2
+              acquire-timeout: 300000
           routes:
             - id: iiif-cantaloupe
               uri: ${CANTALOUPE_URL:http://localhost:8182}

@@ -8,6 +8,12 @@ import org.springframework.http.HttpStatusCode;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.neboltai.gateway.dto.AddAuthorRequest;
+import org.neboltai.gateway.dto.AddMediaRequest;
+import org.neboltai.gateway.dto.AddMediaTypeRequest;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.reactive.function.client.WebClient;
@@ -46,6 +52,43 @@ public class ReferenceDataController {
     private Mono<ResponseEntity<Flux<DataBuffer>>> proxy(String path) {
         return artworkClient.get().uri(path)
                 .accept(MediaType.APPLICATION_JSON)
+                .retrieve()
+                .onStatus(HttpStatusCode::isError, response -> Mono.empty())
+                .toEntityFlux(DataBuffer.class);
+    }
+
+    @Operation(summary = "addAuthor", description = "Create from {familyName, name?, secondName?, description?}; returns the created item with its ID.")
+    @ApiResponse(responseCode = "201", description = "Created")
+    @ApiResponse(responseCode = "400", description = "Missing or invalid required fields")
+    @PostMapping(value = "/addAuthor", consumes = MediaType.APPLICATION_JSON_VALUE,
+            produces = MediaType.APPLICATION_JSON_VALUE)
+    public Mono<ResponseEntity<Flux<DataBuffer>>> addAuthor(@RequestBody AddAuthorRequest request) {
+        return proxyPost("/api/addAuthor", request);
+    }
+
+    @Operation(summary = "addMedia", description = "Create from {name, typeId, description?}; returns the created item with its ID.")
+    @ApiResponse(responseCode = "201", description = "Created")
+    @ApiResponse(responseCode = "400", description = "Missing or invalid required fields")
+    @PostMapping(value = "/addMedia", consumes = MediaType.APPLICATION_JSON_VALUE,
+            produces = MediaType.APPLICATION_JSON_VALUE)
+    public Mono<ResponseEntity<Flux<DataBuffer>>> addMedia(@RequestBody AddMediaRequest request) {
+        return proxyPost("/api/addMedia", request);
+    }
+
+    @Operation(summary = "addMediaType", description = "Create from {type, description?}; returns the created item with its ID.")
+    @ApiResponse(responseCode = "201", description = "Created")
+    @ApiResponse(responseCode = "400", description = "Missing or invalid required fields")
+    @PostMapping(value = "/addMediaType", consumes = MediaType.APPLICATION_JSON_VALUE,
+            produces = MediaType.APPLICATION_JSON_VALUE)
+    public Mono<ResponseEntity<Flux<DataBuffer>>> addMediaType(@RequestBody AddMediaTypeRequest request) {
+        return proxyPost("/api/addMediaType", request);
+    }
+
+    private Mono<ResponseEntity<Flux<DataBuffer>>> proxyPost(String path, Object request) {
+        return artworkClient.post().uri(path)
+                .contentType(MediaType.APPLICATION_JSON)
+                .accept(MediaType.APPLICATION_JSON)
+                .bodyValue(request)
                 .retrieve()
                 .onStatus(HttpStatusCode::isError, response -> Mono.empty())
                 .toEntityFlux(DataBuffer.class);
