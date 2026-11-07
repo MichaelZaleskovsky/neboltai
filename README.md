@@ -1,6 +1,6 @@
 # Neboltai backend – high-resolution collection prototype
 
-Microservice prototype for a collection of very large images.
+Microservice project for a collection of very large images.
 
 ## Architecture
 
