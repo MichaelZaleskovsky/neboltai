@@ -88,11 +88,22 @@ jobs:
       - name: Deploy backend
         shell: bash
         run: |
-          ssh -i ~/.ssh/id_ed25519             "${{ secrets.VM_USER }}@${{ secrets.VM_HOST }}"             "set -e
+          ssh -i ~/.ssh/id_ed25519 \
+            "${{ secrets.VM_USER }}@${{ secrets.VM_HOST }}" \
+            "set -e
              cd /opt/neboltai
+
              git fetch origin main
              git checkout main
-             git pull --ff-only origin main
-             docker compose -f docker-compose.prod.yml pull
-             docker compose -f docker-compose.prod.yml up -d --build
+             git reset --hard origin/main
+
+             docker compose -f docker-compose.prod.yml pull api-gateway artwork-service
+
+             docker compose -f docker-compose.prod.yml run --rm liquibase
+
+             docker compose -f docker-compose.prod.yml up -d \
+               --no-deps \
+               --force-recreate \
+               artwork-service api-gateway
+
              docker image prune -f"
