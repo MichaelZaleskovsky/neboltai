@@ -97,13 +97,103 @@ jobs:
              git checkout main
              git reset --hard origin/main
 
-             docker compose -f docker-compose.prod.yml pull api-gateway artwork-service
-
+             # Run backward-compatible database migrations
              docker compose -f docker-compose.prod.yml run --rm liquibase
 
-             docker compose -f docker-compose.prod.yml up -d \
+             # Detect currently active backend slot from Nginx
+             if grep -q '127.0.0.1:8082' /etc/nginx/conf.d/neboltai-backend.conf; then
+               ACTIVE=green
+               ACTIVE_PORT=8082
+               INACTIVE=blue
+               INACTIVE_PORT=8081
+             else
+               ACTIVE=blue
+               ACTIVE_PORT=8081
+               INACTIVE=green
+               INACTIVE_PORT=8082
+             fi
+
+             echo \"Active slot: \$ACTIVE\"
+             echo \"Deploying slot: \$INACTIVE\"
+
+             # Pull new images for inactive slot
+             docker compose -f docker-compose.blue-green.yml pull \
+               artwork-service-\$INACTIVE \
+               api-gateway-\$INACTIVE
+
+             # Start/recreate inactive slot
+             docker compose -f docker-compose.blue-green.yml up -d \
                --no-deps \
                --force-recreate \
-               artwork-service api-gateway
+               artwork-service-\$INACTIVE \
+               api-gateway-\$INACTIVE
+
+             # Wait for new gateway health
+             HEALTHY=false
+
+             for i in \$(seq 1 30); do
+               if curl -fsS \
+                 http://127.0.0.1:\$INACTIVE_PORT/actuator/health \
+                 | grep -q '\"status\":\"UP\"'; then
+                 HEALTHY=true
+                 break
+               fi
+
+               echo \"Waiting for \$INACTIVE backend... attempt \$i/30\"
+               sleep 5
+             done
+
+             if [ \"\$HEALTHY\" != \"true\" ]; then
+               echo \"New backend failed health check\"
+
+               docker compose -f docker-compose.blue-green.yml rm -sf \
+                 artwork-service-\$INACTIVE \
+                 api-gateway-\$INACTIVE
+
+               exit 1
+             fi
+
+             echo \"New \$INACTIVE backend is healthy\"
+
+             # Switch Nginx configuration to inactive slot
+             sudo sed -i \
+               \"s/server 127.0.0.1:[0-9]*;/server 127.0.0.1:\$INACTIVE_PORT;/\" \
+               /etc/nginx/conf.d/neboltai-backend.conf
+
+             # Validate Nginx before reload
+             if ! sudo nginx -t; then
+               echo \"Nginx configuration validation failed. Rolling back.\"
+
+               sudo sed -i \
+                 \"s/server 127.0.0.1:[0-9]*;/server 127.0.0.1:\$ACTIVE_PORT;/\" \
+                 /etc/nginx/conf.d/neboltai-backend.conf
+
+               exit 1
+             fi
+
+             sudo systemctl reload nginx
+
+             # Verify new backend through Nginx
+             if ! curl -fsS \
+               'http://127.0.0.1/api/artworks/search?page=0&size=1' \
+               > /dev/null; then
+
+               echo \"Backend check through Nginx failed. Rolling back to \$ACTIVE.\"
+
+               sudo sed -i \
+                 \"s/server 127.0.0.1:[0-9]*;/server 127.0.0.1:\$ACTIVE_PORT;/\" \
+                 /etc/nginx/conf.d/neboltai-backend.conf
+
+               sudo nginx -t
+               sudo systemctl reload nginx
+
+               docker compose -f docker-compose.blue-green.yml rm -sf \
+                 artwork-service-\$INACTIVE \
+                 api-gateway-\$INACTIVE
+
+               exit 1
+             fi
+
+             echo \"Traffic successfully switched from \$ACTIVE to \$INACTIVE\"
 
              docker image prune -f"
