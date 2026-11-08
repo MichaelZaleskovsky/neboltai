@@ -196,4 +196,11 @@ jobs:
 
              echo \"Traffic successfully switched from \$ACTIVE to \$INACTIVE\"
 
+             # Stop and remove the old slot after successful switch
+             docker compose -f docker-compose.blue-green.yml rm -sf \
+               artwork-service-\$ACTIVE \
+               api-gateway-\$ACTIVE
+
+             echo \"Old \$ACTIVE slot removed\"
+          
              docker image prune -f"
