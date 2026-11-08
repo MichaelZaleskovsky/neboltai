@@ -1,0 +1,35 @@
+services:
+  artwork-service-green:
+    image: ghcr.io/michaelzaleskovsky/neboltai-artwork-service:latest
+    restart: unless-stopped
+    environment:
+      CATALOG_DB_URL: jdbc:postgresql://postgres:5432/catalogdb
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      MINIO_URL: http://minio:9000
+      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER}
+      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD}
+      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL}
+    networks:
+      - backend
+      - storage
+
+  api-gateway-green:
+    image: ghcr.io/michaelzaleskovsky/neboltai-api-gateway:latest
+    restart: unless-stopped
+    environment:
+      ARTWORK_SERVICE_URL: http://artwork-service-green:8081
+      CANTALOUPE_URL: http://cantaloupe:8182
+    ports:
+      - "127.0.0.1:8082:8080"
+    networks:
+      - backend
+
+networks:
+  backend:
+    external: true
+    name: neboltai_backend
+
+  storage:
+    external: true
+    name: neboltai_storage
